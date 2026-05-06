@@ -22,4 +22,25 @@ public interface TransactionRepository extends JpaRepository<TransactionEntity, 
     List<TransactionEntity> findSimilarTransactions(
             @Param("embedding") String embedding,
             @Param("limit") int limit);
+
+    /**
+     * Returns [id, transaction_id, decision, fraud_score, similarity] rows.
+     * similarity = 1 - cosine_distance, so higher = more similar.
+     * Only includes transactions that already have a decision (training data).
+     */
+    @Query(value = """
+            SELECT t.id,
+                   t.transaction_id,
+                   t.decision,
+                   t.fraud_score,
+                   1 - (t.embedding <=> CAST(:embedding AS vector)) AS similarity
+            FROM transactions t
+            WHERE t.embedding IS NOT NULL
+              AND t.decision   IS NOT NULL
+            ORDER BY t.embedding <=> CAST(:embedding AS vector)
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Object[]> findSimilarWithScore(
+            @Param("embedding") String embedding,
+            @Param("limit") int limit);
 }

@@ -26,6 +26,9 @@ app:
     threshold:
       flag: 0.7
       block: 0.9
+    scoring:
+      similar-transactions-count: 10
+      cold-start-score: 0.5
 
 server:
   port: 8080
