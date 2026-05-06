@@ -2,6 +2,7 @@ package com.frauddetection.domain.entity;
 
 import com.frauddetection.domain.enums.FraudDecision;
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -23,7 +24,7 @@ public class FraudAuditLogEntity {
     private TransactionEntity transaction;
 
     @Column(name = "fraud_score", nullable = false, precision = 4, scale = 3)
-    private Double fraudScore;
+    private BigDecimal fraudScore;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

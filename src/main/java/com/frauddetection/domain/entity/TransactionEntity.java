@@ -40,7 +40,7 @@ public class TransactionEntity {
     private String currencyCode;
 
     @Column(name = "fraud_score", precision = 4, scale = 3)
-    private Double fraudScore;
+    private BigDecimal fraudScore;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 20)

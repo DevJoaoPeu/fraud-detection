@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Service
@@ -55,7 +56,7 @@ public class TransactionService {
         entity.setCountryCode(request.countryCode());
         entity.setCurrencyCode(request.currencyCode());
         entity.setEmbedding(embedding);
-        entity.setFraudScore(scoring.fraudScore());
+        entity.setFraudScore(BigDecimal.valueOf(scoring.fraudScore()));
         entity.setDecision(scoring.decision());
         entity.setProcessedAt(LocalDateTime.now());
         return entity;
@@ -65,7 +66,7 @@ public class TransactionService {
                                               FraudScoringService.ScoringResult scoring) {
         var log = new FraudAuditLogEntity();
         log.setTransaction(entity);
-        log.setFraudScore(scoring.fraudScore());
+        log.setFraudScore(BigDecimal.valueOf(scoring.fraudScore()));
         log.setDecision(scoring.decision());
         log.setModelVersion(embeddingService.getModelVersion());
         return log;

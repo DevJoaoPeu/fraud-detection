@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 public record TransactionResponse(
         String transactionId,
         BigDecimal amount,
-        Double fraudScore,
+        BigDecimal fraudScore,
         FraudDecision decision,
         LocalDateTime processedAt
 ) {}
