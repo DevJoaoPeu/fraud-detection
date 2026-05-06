@@ -25,6 +25,10 @@ public class EmbeddingService {
                 .build();
     }
 
+    public String getModelVersion() {
+        return properties.model();
+    }
+
     public float[] generateEmbedding(TransactionRequest transaction) {
         String text = buildTransactionText(transaction);
         return callGeminiEmbedding(text);
