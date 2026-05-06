@@ -1,0 +1,33 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/frauddetection
+    username: ${DB_USERNAME:fraud}
+    password: ${DB_PASSWORD:fraud}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+app:
+  embedding:
+    dimension: 768
+    model: text-embedding-004
+    api-key: ${GEMINI_API_KEY}
+  fraud:
+    threshold:
+      flag: 0.7
+      block: 0.9
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
