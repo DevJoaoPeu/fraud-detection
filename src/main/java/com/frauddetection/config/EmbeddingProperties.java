@@ -6,6 +6,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record EmbeddingProperties(
         int dimension,
         String model,
-        String apiKey,
-        String baseUrl
+        String apiKey
 ) {}

@@ -22,7 +22,6 @@ app:
     dimension: 768
     model: gemini-embedding-001
     api-key: ${GEMINI_API_KEY}
-    base-url: ${GEMINI_BASE_URL}
   fraud:
     threshold:
       flag: 0.7
