@@ -115,6 +115,55 @@ score < 0.7  →  APPROVED
 
 **Cold start:** quando não há transações históricas suficientes, o score padrão é `0.5` (FLAGGED para revisão manual).
 
+### O que é comparado
+
+O `EmbeddingService` serializa os campos da transação em texto antes de enviar ao Gemini:
+
+```
+"amount:250.00 merchant:merchant-001 category:FOOD country:BR currency:BRL"
+```
+
+O Gemini devolve um vetor de 768 números representando o significado semântico dessa combinação. Transações com padrões parecidos (valor, merchant, categoria, país) geram vetores próximos no espaço vetorial. A busca no banco usa distância cosseno (`<=>`) e retorna apenas transações que **já possuem decisão** — os dados históricos rotulados que servem de base para o KNN.
+
+### Muitos registros de fraude no banco não garantem score alto
+
+O que importa é a **similaridade** dos vizinhos encontrados, não a quantidade de fraudes existentes no banco.
+
+**Cenário 1 — 5 vizinhos BLOCKED, mas distantes → APPROVED:**
+```
+vizinho 1: BLOCKED, similaridade 0.12  →  contribui 0.12
+vizinho 2: BLOCKED, similaridade 0.09  →  contribui 0.09
+vizinho 3: BLOCKED, similaridade 0.07  →  contribui 0.07
+vizinho 4: BLOCKED, similaridade 0.06  →  contribui 0.06
+vizinho 5: BLOCKED, similaridade 0.05  →  contribui 0.05
+
+score = (0.12 + 0.09 + 0.07 + 0.06 + 0.05) / (0.12 + 0.09 + 0.07 + 0.06 + 0.05)
+score = 0.39 / 0.39 = 1.0 ???
+```
+
+> Na prática, se todos os vizinhos são BLOCKED (peso 1.0), o numerador e denominador são iguais e o score seria 1.0. Mas isso só acontece se esses forem os únicos K vizinhos retornados — e com similaridade muito baixa, significa que não há histórico realmente parecido.
+
+**Cenário 2 — 2 BLOCKED muito próximos + 8 APPROVED distantes → BLOCKED:**
+```
+vizinho 1: BLOCKED,  similaridade 0.97  →  contribui 0.97
+vizinho 2: BLOCKED,  similaridade 0.95  →  contribui 0.95
+vizinhos 3–10: APPROVED → peso 0.0, contribuem 0.00
+
+score = (0.97 + 0.95) / (0.97 + 0.95 + 0.85 + 0.80 + ... ) ≈ 0.91  →  BLOCKED
+```
+
+**Cenário 3 — Mix realista → FLAGGED:**
+```
+vizinho 1: APPROVED, similaridade 0.92  →  contribui 0.00
+vizinho 2: FLAGGED,  similaridade 0.88  →  contribui 0.44
+vizinho 3: BLOCKED,  similaridade 0.75  →  contribui 0.75
+vizinhos 4–10: APPROVED                →  contribuem 0.00
+
+score = (0.00 + 0.44 + 0.75) / (0.92 + 0.88 + 0.75 + ...) ≈ 0.73  →  FLAGGED
+```
+
+O sistema detecta fraude quando as transações históricas **similares** foram bloqueadas — não quando há muitas fraudes no banco em geral.
+
 ---
 
 ## Estrutura do Projeto
