@@ -17,16 +17,13 @@ public class EmbeddingService {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddingService.class);
 
-    private static final String GEMINI_BASE_URL =
-            "https://generativelanguage.googleapis.com/v1beta";
-
     private final RestClient restClient;
     private final EmbeddingProperties properties;
 
     public EmbeddingService(EmbeddingProperties properties) {
         this.properties = properties;
         this.restClient = RestClient.builder()
-                .baseUrl(GEMINI_BASE_URL)
+                .baseUrl(properties.baseUrl())
                 .build();
     }
 
