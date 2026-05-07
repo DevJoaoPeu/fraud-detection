@@ -2,15 +2,20 @@ package com.frauddetection.service;
 
 import com.frauddetection.config.EmbeddingProperties;
 import com.frauddetection.dto.TransactionRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Service
 public class EmbeddingService {
+
+    private static final Logger log = LoggerFactory.getLogger(EmbeddingService.class);
 
     private static final String GEMINI_BASE_URL =
             "https://generativelanguage.googleapis.com/v1beta";
@@ -37,7 +42,8 @@ public class EmbeddingService {
     private float[] callGeminiEmbedding(String text) {
         var request = new EmbedRequest(
                 "models/" + properties.model(),
-                new Content(List.of(new Part(text)))
+                new Content(List.of(new Part(text))),
+                properties.dimension()
         );
 
         var response = restClient.post()
@@ -47,8 +53,11 @@ public class EmbeddingService {
                 .body(request)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, (req, res) -> {
-                    throw new EmbeddingException(
-                            "Gemini API error: HTTP " + res.getStatusCode());
+                    String body = new String(res.getBody().readAllBytes(), StandardCharsets.UTF_8);
+                    String safeUri = req.getURI().toString().replaceAll("key=[^&]+", "key=***");
+                    log.error("Gemini API error: HTTP {} | URL: {} | body: {}",
+                            res.getStatusCode(), safeUri, body);
+                    throw new EmbeddingException("Gemini API error: HTTP " + res.getStatusCode());
                 })
                 .body(EmbedResponse.class);
 
@@ -83,7 +92,7 @@ public class EmbeddingService {
 
     // ── Gemini Embedding API contracts (internal) ──────────────────────────
 
-    private record EmbedRequest(String model, Content content) {}
+    private record EmbedRequest(String model, Content content, int outputDimensionality) {}
     private record Content(List<Part> parts) {}
     private record Part(String text) {}
     private record EmbedResponse(Embedding embedding) {}
