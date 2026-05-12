@@ -1,0 +1,8 @@
+{
+  "transactionId": "TXN-FRAUD-20240315-001",
+  "amount": 14999.99,
+  "merchantId": "MERCH-JEWEL-GH-0042",
+  "merchantCategory": "5944",
+  "countryCode": "GH",
+  "currencyCode": "USD"
+}

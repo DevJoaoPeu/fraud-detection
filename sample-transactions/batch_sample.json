@@ -1,0 +1,42 @@
+[
+  {
+    "transactionId": "BATCH-001",
+    "amount": 45.90,
+    "merchantId": "MERCH-PREZUNIC-RJ-001",
+    "merchantCategory": "5411",
+    "countryCode": "BR",
+    "currencyCode": "BRL"
+  },
+  {
+    "transactionId": "BATCH-002",
+    "amount": 89.50,
+    "merchantId": "MERCH-OUTBACK-SP-003",
+    "merchantCategory": "5812",
+    "countryCode": "BR",
+    "currencyCode": "BRL"
+  },
+  {
+    "transactionId": "BATCH-003",
+    "amount": 210.00,
+    "merchantId": "MERCH-PETROBRAS-MG-001",
+    "merchantCategory": "5541",
+    "countryCode": "BR",
+    "currencyCode": "BRL"
+  },
+  {
+    "transactionId": "BATCH-004",
+    "amount": 1.00,
+    "merchantId": "MERCH-ONLINE-UNKNOWN-9912",
+    "merchantCategory": "7995",
+    "countryCode": "RO",
+    "currencyCode": "USD"
+  },
+  {
+    "transactionId": "BATCH-005",
+    "amount": 8750.00,
+    "merchantId": "MERCH-ELECTRONICS-UA-0077",
+    "merchantCategory": "5732",
+    "countryCode": "UA",
+    "currencyCode": "USD"
+  }
+]
