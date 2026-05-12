@@ -3,6 +3,7 @@ package com.frauddetection.service;
 import com.frauddetection.config.FraudProperties;
 import com.frauddetection.domain.enums.FraudDecision;
 import com.frauddetection.domain.repository.TransactionRepository;
+import com.frauddetection.dto.TransactionRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,35 +13,41 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class FraudScoringService {
 
+    private static final double KNN_WEIGHT  = 0.7;
+    private static final double RULE_WEIGHT = 0.3;
+
     private final TransactionRepository transactionRepository;
     private final FraudProperties properties;
+    private final RuleBasedScoringService ruleBasedScoringService;
 
     public FraudScoringService(TransactionRepository transactionRepository,
-                               FraudProperties properties) {
+                               FraudProperties properties,
+                               RuleBasedScoringService ruleBasedScoringService) {
         this.transactionRepository = transactionRepository;
         this.properties = properties;
+        this.ruleBasedScoringService = ruleBasedScoringService;
     }
 
-    public ScoringResult score(float[] embedding) {
+    public ScoringResult score(float[] embedding, TransactionRequest request) {
         int k = properties.scoring().similarTransactionsCount();
         var rows = transactionRepository.findSimilarWithScore(toVectorString(embedding), k);
 
-        double fraudScore = computeWeightedScore(rows);
-        FraudDecision decision = resolveDecision(fraudScore);
+        double ruleScore = ruleBasedScoringService.score(request);
+        double finalScore;
 
-        return new ScoringResult(fraudScore, decision);
-    }
-
-    /**
-     * KNN weighted score: each neighbor votes with weight = cosine similarity.
-     * BLOCKED = 1.0, FLAGGED = 0.5, APPROVED = 0.0.
-     * Falls back to cold-start score when no labeled neighbors exist.
-     */
-    private double computeWeightedScore(List<Object[]> rows) {
         if (rows.isEmpty()) {
-            return properties.scoring().coldStartScore();
+            // Cold start: no labeled history — rely entirely on rules
+            finalScore = ruleScore;
+        } else {
+            double knnScore = computeWeightedKnnScore(rows);
+            // Blend KNN (primary) with rules (secondary signal)
+            finalScore = clamp(KNN_WEIGHT * knnScore + RULE_WEIGHT * ruleScore);
         }
 
+        return new ScoringResult(finalScore, resolveDecision(finalScore));
+    }
+
+    private double computeWeightedKnnScore(List<Object[]> rows) {
         double weightedSum = 0.0;
         double totalWeight = 0.0;
 
