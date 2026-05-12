@@ -29,7 +29,7 @@ public class TransactionService {
         }
 
         float[] embedding = embeddingService.generateEmbedding(request);
-        var scoring = fraudScoringService.score(embedding, request);
+        var scoring = fraudScoringService.score(embedding);
 
         var entity = buildEntity(request, embedding, scoring);
         entity = transactionRepository.save(entity);
