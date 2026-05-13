@@ -11,11 +11,19 @@ Sistema de detecção de fraude em tempo real baseado em busca vetorial semânti
 │                          HTTP Client                            │
 └────────────────────────────┬────────────────────────────────────┘
                              │ POST /api/v1/transactions/analyze
+                             │ POST /api/v1/transactions/ingest
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    TransactionController                        │
 │                  (Validação via Jakarta Bean)                   │
-└────────────────────────────┬────────────────────────────────────┘
+└──────────────┬──────────────────────────────┬───────────────────┘
+               │ /analyze                     │ /ingest
+               ▼                              ▼
+┌──────────────────────┐       ┌──────────────────────────────────┐
+│  TransactionService  │◄──────│      TransactionBatchService     │
+│  (unidade única)     │       │  Itera o lote, captura erros     │
+└──────────────────────┘       │  por item sem abortar o batch    │
+               │               └──────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
@@ -113,7 +121,7 @@ score ≥ 0.7  →  FLAGGED
 score < 0.7  →  APPROVED
 ```
 
-**Cold start:** quando não há transações históricas suficientes, o score padrão é `0.5` (FLAGGED para revisão manual).
+**Cold start:** quando não há transações históricas suficientes, o score padrão é `0.5`. Na prática isso não ocorre porque o `DataInitializer` popula o banco automaticamente na primeira subida (veja abaixo).
 
 ### O que é comparado
 
@@ -169,46 +177,59 @@ O sistema detecta fraude quando as transações históricas **similares** foram 
 ## Estrutura do Projeto
 
 ```
-src/
-├── main/
-│   ├── java/com/frauddetection/
-│   │   ├── FraudDetectionApplication.java
-│   │   ├── config/
-│   │   │   ├── EmbeddingProperties.java   # app.embedding.*
-│   │   │   ├── FraudProperties.java       # app.fraud.*
-│   │   │   └── SecurityConfig.java
-│   │   ├── controller/
-│   │   │   ├── TransactionController.java
-│   │   │   └── GlobalExceptionHandler.java
-│   │   ├── dto/
-│   │   │   ├── TransactionRequest.java
-│   │   │   └── TransactionResponse.java
-│   │   ├── domain/
-│   │   │   ├── entity/
-│   │   │   │   ├── TransactionEntity.java
-│   │   │   │   └── FraudAuditLogEntity.java
-│   │   │   ├── enums/
-│   │   │   │   └── FraudDecision.java     # APPROVED | FLAGGED | BLOCKED
-│   │   │   └── repository/
-│   │   │       ├── TransactionRepository.java
-│   │   │       └── FraudAuditLogRepository.java
-│   │   ├── service/
-│   │   │   ├── TransactionService.java    # orquestração principal
-│   │   │   ├── FraudScoringService.java   # KNN scoring
-│   │   │   ├── EmbeddingService.java      # integração Gemini
-│   │   │   ├── DuplicateTransactionException.java
-│   │   │   └── EmbeddingException.java
-│   │   └── infrastructure/
-│   │       └── persistence/type/
-│   │           └── VectorUserType.java    # float[] ↔ vector(768)
-│   └── resources/
-│       ├── application.yml
-│       └── db/migration/
-│           ├── V1__init.sql               # schema inicial
-│           ├── V2__fix_char_to_varchar.sql
-│           └── V3__update_embedding_dimension.sql
-└── test/
-    └── java/com/frauddetection/          # Testcontainers (a implementar)
+fraud-detection/
+├── sample-transactions/
+│   ├── fraudulent_transaction.json       # exemplo de transação fraudulenta
+│   ├── legitimate_transaction.json       # exemplo de transação legítima
+│   └── batch_sample.json                 # lote misto para testar o /ingest
+├── src/
+│   ├── main/
+│   │   ├── java/com/frauddetection/
+│   │   │   ├── FraudDetectionApplication.java
+│   │   │   ├── config/
+│   │   │   │   ├── DataInitializer.java       # seed automático no cold start
+│   │   │   │   ├── EmbeddingProperties.java   # app.embedding.*
+│   │   │   │   ├── FraudProperties.java       # app.fraud.*
+│   │   │   │   └── SecurityConfig.java
+│   │   │   ├── controller/
+│   │   │   │   ├── TransactionController.java
+│   │   │   │   └── GlobalExceptionHandler.java
+│   │   │   ├── dto/
+│   │   │   │   ├── TransactionRequest.java
+│   │   │   │   ├── TransactionResponse.java
+│   │   │   │   └── TransactionBatchResponse.java
+│   │   │   ├── domain/
+│   │   │   │   ├── entity/
+│   │   │   │   │   ├── TransactionEntity.java
+│   │   │   │   │   └── FraudAuditLogEntity.java
+│   │   │   │   ├── enums/
+│   │   │   │   │   └── FraudDecision.java     # APPROVED | FLAGGED | BLOCKED
+│   │   │   │   └── repository/
+│   │   │   │       ├── TransactionRepository.java
+│   │   │   │       └── FraudAuditLogRepository.java
+│   │   │   ├── service/
+│   │   │   │   ├── TransactionService.java        # orquestração principal
+│   │   │   │   ├── TransactionBatchService.java   # processamento em lote
+│   │   │   │   ├── SeedService.java               # persiste seed com decisão explícita
+│   │   │   │   ├── FraudScoringService.java       # KNN scoring
+│   │   │   │   ├── EmbeddingService.java          # integração Gemini
+│   │   │   │   ├── DuplicateTransactionException.java
+│   │   │   │   └── EmbeddingException.java
+│   │   │   └── infrastructure/
+│   │   │       └── persistence/type/
+│   │   │           └── VectorUserType.java        # float[] ↔ vector(768)
+│   │   └── resources/
+│   │       ├── application.yml
+│   │       └── db/migration/
+│   │           ├── V1__init.sql                   # schema inicial
+│   │           └── V2__fix_char_to_varchar.sql
+│   └── test/
+│       └── java/com/frauddetection/
+│           └── service/
+│               ├── FraudScoringServiceTest.java
+│               ├── TransactionServiceTest.java
+│               ├── SeedServiceTest.java
+│               └── TransactionBatchServiceTest.java
 ```
 
 ---
@@ -217,7 +238,7 @@ src/
 
 ### `POST /api/v1/transactions/analyze`
 
-Analisa uma transação e retorna a decisão de fraude.
+Analisa uma transação individual e retorna a decisão de fraude.
 
 **Request:**
 ```json
@@ -225,7 +246,7 @@ Analisa uma transação e retorna a decisão de fraude.
   "transactionId": "txn-abc-123",
   "amount": 1500.00,
   "merchantId": "merchant-456",
-  "merchantCategory": "ELECTRONICS",
+  "merchantCategory": "5732",
   "countryCode": "BR",
   "currencyCode": "BRL"
 }
@@ -250,6 +271,61 @@ Analisa uma transação e retorna a decisão de fraude.
 | `409` | `transactionId` já processado |
 | `502` | Falha na chamada à API do Gemini |
 | `500` | Erro interno |
+
+---
+
+### `POST /api/v1/transactions/ingest`
+
+Processa um lote de transações de uma vez. Cada item é analisado de forma independente — falhas individuais (ex: duplicata) são capturadas sem abortar o restante do lote.
+
+**Request:**
+```json
+[
+  {
+    "transactionId": "txn-001",
+    "amount": 45.90,
+    "merchantId": "MERCH-SUPERMERCADO-001",
+    "merchantCategory": "5411",
+    "countryCode": "BR",
+    "currencyCode": "BRL"
+  },
+  {
+    "transactionId": "txn-002",
+    "amount": 14999.99,
+    "merchantId": "MERCH-JEWEL-GH-001",
+    "merchantCategory": "5944",
+    "countryCode": "GH",
+    "currencyCode": "USD"
+  }
+]
+```
+
+**Response `200 OK`:**
+```json
+{
+  "total": 2,
+  "approved": 1,
+  "flagged": 0,
+  "blocked": 1,
+  "failed": 0,
+  "results": [
+    {
+      "transactionId": "txn-001",
+      "success": true,
+      "data": { "fraudScore": 0.05, "decision": "APPROVED", ... },
+      "error": null
+    },
+    {
+      "transactionId": "txn-002",
+      "success": true,
+      "data": { "fraudScore": 0.95, "decision": "BLOCKED", ... },
+      "error": null
+    }
+  ]
+}
+```
+
+> Os arquivos em `sample-transactions/` já estão no formato correto para uso com ambos os endpoints.
 
 ---
 
@@ -298,35 +374,40 @@ docker compose up -d
 
 ### 2. Configurar variáveis de ambiente
 
-```bash
-export DB_POSTGRES_URL=jdbc:postgresql://localhost:5432/frauddetection
-export DB_USERNAME=fraud
-export DB_PASSWORD=fraud
-export GEMINI_API_KEY=sua_chave_aqui
-export GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+Crie um arquivo `.env` na raiz do projeto (já há um `.env` de exemplo no repositório):
+
+```env
+DB_POSTGRES_URL=jdbc:postgresql://localhost:5432/frauddetection
+DB_USERNAME=fraud
+DB_PASSWORD=fraud
+GEMINI_API_KEY=sua_chave_aqui
+GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta
 ```
+
+As variáveis são carregadas automaticamente via `spring-dotenv` — não é necessário exportá-las manualmente.
 
 ### 3. Executar a aplicação
 
 ```bash
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
-As migrations do Flyway rodam automaticamente na inicialização.
+Na inicialização, o Flyway aplica as migrations e o `DataInitializer` verifica se o banco está vazio. Se estiver, popula automaticamente com transações rotuladas (BLOCKED, FLAGGED, APPROVED) para que o KNN já tenha base de comparação desde a primeira requisição.
 
 ### 4. Testar
 
+**Transação única:**
 ```bash
 curl -X POST http://localhost:8080/api/v1/transactions/analyze \
   -H "Content-Type: application/json" \
-  -d '{
-    "transactionId": "txn-001",
-    "amount": 250.00,
-    "merchantId": "merchant-001",
-    "merchantCategory": "FOOD",
-    "countryCode": "BR",
-    "currencyCode": "BRL"
-  }'
+  -d @sample-transactions/fraudulent_transaction.json
+```
+
+**Lote de transações:**
+```bash
+curl -X POST http://localhost:8080/api/v1/transactions/ingest \
+  -H "Content-Type: application/json" \
+  -d @sample-transactions/batch_sample.json
 ```
 
 ---
@@ -348,7 +429,6 @@ CREATE INDEX idx_transactions_embedding ON transactions
 |---|---|
 | V1 | Schema inicial: `transactions` e `fraud_audit_log` com índice HNSW |
 | V2 | Corrige tipo das colunas `country_code` e `currency_code` de `CHAR` para `VARCHAR` |
-| V3 | Atualiza dimensão do vetor de `768` para `3072` (revertível via nova migration) |
 
 > **Atenção:** migrations são imutáveis após aplicadas. Toda alteração de schema requer uma nova versão.
 
@@ -358,5 +438,7 @@ CREATE INDEX idx_transactions_embedding ON transactions
 
 - **Embeddings como `float[]`:** tipo primitivo direto, sem wrapper, mapeado por `VectorUserType` (Hibernate 6 `UserType<float[]>`) para evitar dependência do tipo `PGvector` nas entidades de domínio.
 - **Audit log obrigatório:** toda decisão é registrada em `fraud_audit_log` com o modelo usado, permitindo rastrear mudanças de comportamento ao atualizar modelos de embedding.
-- **Cold start com score neutro:** novas instalações sem histórico retornam `0.5` (FLAGGED), priorizando revisão manual sobre falsos negativos.
+- **Seed data no lugar de regras:** o cold start é resolvido com dados rotulados reais (gerados via Gemini pelo `DataInitializer`) em vez de regras hard-coded no código. Isso mantém o scoring puramente orientado a dados e facilita ajuste fino sem alterar lógica de negócio.
+- **Ingestão em lote tolerante a falhas:** o `/ingest` processa cada transação de forma independente. Erros individuais (duplicata, falha de embedding) são capturados por item — o lote inteiro nunca falha por causa de um único problema.
+- **`DataInitializer` idempotente:** verifica `transactionRepository.count() > 0` antes de semear; em restarts normais não executa nenhuma operação no banco.
 - **`outputDimensionality=768`:** o modelo `gemini-embedding-001` nativamente gera 3072 dimensões; o parâmetro trunca para 768 via Matryoshka Representation Learning, mantendo compatibilidade com o schema sem perda significativa de qualidade semântica.
